@@ -179,8 +179,34 @@ def task_finder(url):
     else:
         add_to_dictionary_with_arrays(tasks_to_check, "Не удалось загрузить ответы", url)
 
+#url
+#https://school.burimova.ru/pl/user/user/index?uc[segment_id]=0&uc[rule_string]={"type":"user_hasuserproduct","inverted":0,"className":"app::modules::user::models::rule::HasUserProductRule","params":{"linkedRule":{"type":"userproduct_responsible_teacher_rule","inverted":0,"className":"app::components::logic::rule::CustomFieldRule","params":{"value":{"selected_id":["{162564886}"]},"valueMode":null}},"countCondition":null}}
 
-def main():
+#referrer
+#https://school.burimova.ru/pl/user/user/index?uc%5Bsegment_id%5D=0&uc%5Brule_string%5D=%7B%22type%22%3A%22user_hasuserproduct%22%2C%22inverted%22%3A0%2C%22params%22%3A%7B%22linkedRule%22%3A%7B%22type%22%3A%22userproduct_responsible_teacher_rule%22%2C%22inverted%22%3A0%2C%22params%22%3A%7B%22value%22%3A%7B%22selected_id%22%3A%5B%22162624785%22%5D%7D%2C%22valueMode%22%3Anull%7D%7D%2C%22countCondition%22%3A%7B%22checker%22%3A%22nlt%22%2C%22numval%22%3A%22%22%7D%7D%2C%22maxSize%22%3A%22%22%7D
+def get_user_studnets(user_id):
+    url = "https://school.burimova.ru/pl/user/user/index?uc[segment_id]=0&uc[rule_string]={\"type\":\"user_hasuserproduct\",\"inverted\":0,\"className\":\"app::modules::user::models::rule::HasUserProductRule\",\"params\":{\"linkedRule\":{\"type\":\"userproduct_responsible_teacher_rule\",\"inverted\":0,\"className\":\"app::components::logic::rule::CustomFieldRule\",\"params\":{\"value\":{\"selected_id\":[\"" + user_id + "\"]},\"valueMode\":null}},\"countCondition\":null}}"
+
+    user_id_pattern = re.compile(r"data-user-id=\"([0-9]{9})\"")
+
+    response = s.get(url)
+
+    print(response.text)
+
+    if response.status_code == 200 and len(response.text) != 0:        
+        page = BeautifulSoup(response.text, 'lxml')
+
+        list_counter = page.find("ul", {"class":"pagination"})
+
+        if list_counter is None:
+            #all in one
+            results = re.findall(user_id_pattern, response.text)
+            print(results)
+        else:
+            print(list_counter)
+
+
+def get_user_session():
     creds = get_creds("login.txt")
 
     if creds is None:
@@ -194,6 +220,8 @@ def main():
 
     authorization(login.strip(),password.strip())
 
+
+def main():   
     f = open("my_student_ids.txt", "r")
     currentDate = datetime.datetime.today().strftime("%Y-%d-%m-%H-%M-%S")
 
@@ -213,7 +241,12 @@ def main():
     f.close()
 
 
-main()
+get_user_session()
+
+#162564886
+get_user_studnets("162624785")
+
+#main()
 
 res_string = string_dictionary_with_arrays(tasks_to_check)
 
