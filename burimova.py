@@ -4,6 +4,8 @@ import datetime
 import logging
 import sys
 from bs4 import BeautifulSoup
+import urllib.parse
+import sys
 
 logging.basicConfig(level=logging.INFO)
 
@@ -179,11 +181,7 @@ def task_finder(url):
     else:
         add_to_dictionary_with_arrays(tasks_to_check, "Не удалось загрузить ответы", url)
 
-#url
-#https://school.burimova.ru/pl/user/user/index?uc[segment_id]=0&uc[rule_string]={"type":"user_hasuserproduct","inverted":0,"className":"app::modules::user::models::rule::HasUserProductRule","params":{"linkedRule":{"type":"userproduct_responsible_teacher_rule","inverted":0,"className":"app::components::logic::rule::CustomFieldRule","params":{"value":{"selected_id":["{162564886}"]},"valueMode":null}},"countCondition":null}}
 
-#referrer
-#https://school.burimova.ru/pl/user/user/index?uc%5Bsegment_id%5D=0&uc%5Brule_string%5D=%7B%22type%22%3A%22user_hasuserproduct%22%2C%22inverted%22%3A0%2C%22params%22%3A%7B%22linkedRule%22%3A%7B%22type%22%3A%22userproduct_responsible_teacher_rule%22%2C%22inverted%22%3A0%2C%22params%22%3A%7B%22value%22%3A%7B%22selected_id%22%3A%5B%22162624785%22%5D%7D%2C%22valueMode%22%3Anull%7D%7D%2C%22countCondition%22%3A%7B%22checker%22%3A%22nlt%22%2C%22numval%22%3A%22%22%7D%7D%2C%22maxSize%22%3A%22%22%7D
 def get_user_studnets(user_id):
     url = "https://school.burimova.ru/pl/user/user/index?uc[segment_id]=0&uc[rule_string]={\"type\":\"user_hasuserproduct\",\"inverted\":0,\"className\":\"app::modules::user::models::rule::HasUserProductRule\",\"params\":{\"linkedRule\":{\"type\":\"userproduct_responsible_teacher_rule\",\"inverted\":0,\"className\":\"app::components::logic::rule::CustomFieldRule\",\"params\":{\"value\":{\"selected_id\":[\"" + user_id + "\"]},\"valueMode\":null}},\"countCondition\":null}}"
 
@@ -191,19 +189,44 @@ def get_user_studnets(user_id):
 
     response = s.get(url)
 
-    print(response.text)
-
     if response.status_code == 200 and len(response.text) != 0:        
         page = BeautifulSoup(response.text, 'lxml')
 
         list_counter = page.find("ul", {"class":"pagination"})
 
         if list_counter is None:
-            #all in one
             results = re.findall(user_id_pattern, response.text)
-            print(results)
-        else:
-            print(list_counter)
+        else: 
+            all_links = list_counter.findChildren("li", recursive=False)
+
+            useful_links = []
+
+            for link in all_links:
+                str_link = str(link)
+                if re.match(re.compile(r"<li([\s]*class=\"active\")*>"), str_link) is not None:
+                    link_url = re.search(re.compile(r"href=\"([^\"]+)\""), str_link)
+                    if link_url is not None:
+                        useful_links.append(urllib.parse.unquote(link_url.group(1)).replace("amp;",""))
+
+            summary_response_text = ""
+
+            for link in useful_links:
+                try_counter = 0
+                
+                response = s.get("https://school.burimova.ru"+link)
+
+                while response is None or try_counter != 3:
+                    try_counter += 1
+                    response = s.get("https://school.burimova.ru"+link)
+
+                if response is None:
+                    print(f"Cant get response from https://school.burimova.ru{link}! You can miss multiple identifiers. Its better to start all over again")
+                
+                summary_response_text += response.text
+
+            results = re.findall(user_id_pattern, summary_response_text)
+        
+        return results
 
 
 def get_user_session():
@@ -221,16 +244,28 @@ def get_user_session():
     authorization(login.strip(),password.strip())
 
 
-def main():   
-    f = open("my_student_ids.txt", "r")
-    currentDate = datetime.datetime.today().strftime("%Y-%d-%m-%H-%M-%S")
+def get_user_id():
+    url = "https://school.burimova.ru/user/my/profile"
 
+    response = s.get(url)
+
+    if response is None:
+        sys.exit("No response when you receive your id")
+    else:
+        try:
+            id = re.search(re.compile(r"window.accountUserId = ([0-9]{9});"), response.text).group(1)
+            return id
+        except:
+            sys.exit("Error receiving your id")              
+
+
+def main(students_ids): 
+    currentDate = datetime.datetime.today().strftime("%Y-%d-%m-%H-%M-%S")
+    print(f"Total students: {len(students_ids)}")
     logging.info("Searching...")
 
-    for id in f:
+    for id in students_ids:
         task_finder(f"https://school.burimova.ru/teach/control/stat/userComments/id/{id.strip()}")
-
-    f.close()
 
     f = open(f"{currentDate}-tasks.html", "w", encoding="utf-8")
     f.write(string_dictionary_with_arrays(tasks_to_check))
@@ -243,11 +278,9 @@ def main():
 
 get_user_session()
 
-#162564886
-get_user_studnets("162624785")
+user_id = get_user_id()
 
-#main()
-
+main(get_user_studnets(user_id))
 res_string = string_dictionary_with_arrays(tasks_to_check)
 
 input("Press any key to exit")
